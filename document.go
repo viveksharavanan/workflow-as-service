@@ -229,11 +229,10 @@ func (_Documents) New(otx *sql.Tx, input *DocumentsNewInput) (DocumentID, error)
 		tx = otx
 	}
 
-	tbl := DocTypes.docStorName(input.DocTypeID)
-	q2 := `INSERT INTO ` + tbl + `(path, ac_id, docstate_id, group_id, ctime, title, data)
-	VALUES (?, ?, ?, ?, NOW(), ?, ?)
+	q2 := `INSERT INTO wf_documents(doctype_id, path, ac_id, docstate_id, group_id, ctime, title, data)
+	VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
 	`
-	res, err := tx.Exec(q2, string(path), input.AccessContextID, dsid, input.GroupID, input.Title, input.Data)
+	res, err := tx.Exec(q2, input.DocTypeID, string(path), input.AccessContextID, dsid, input.GroupID, input.Title, input.Data)
 	if err != nil {
 		return 0, err
 	}
@@ -292,10 +291,9 @@ func (_Documents) List(input *DocumentsListInput, offset, limit int64) ([]*Docum
 
 	// Base query.
 
-	tbl := DocTypes.docStorName(input.DocTypeID)
 	q := `
 	SELECT docs.id, docs.path, docs.ac_id, docs.group_id, gm.name, docs.docstate_id, dsm.name, docs.ctime, docs.title
-	FROM ` + tbl + ` docs
+	FROM wf_documents docs
 	JOIN wf_groups_master gm ON gm.id = docs.group_id
 	JOIN wf_docstates_master dsm ON dsm.id = docs.docstate_id
 	`
@@ -303,8 +301,9 @@ func (_Documents) List(input *DocumentsListInput, offset, limit int64) ([]*Docum
 	// Process input specification.
 
 	where := []string{}
-	args := []interface{}{input.AccessContextID}
-	q += `WHERE docs.ac_id = ?
+	args := []interface{}{input.DocTypeID, input.AccessContextID}
+	q += `WHERE docs.doctype_id = ?
+	AND docs.ac_id = ?
 	`
 
 	if input.GroupID > 0 {
@@ -389,21 +388,21 @@ func (_Documents) List(input *DocumentsListInput, offset, limit int64) ([]*Docum
 // information viz. blobs, tags and children documents have to be
 // fetched separately.
 func (_Documents) Get(otx *sql.Tx, dtype DocTypeID, id DocumentID) (*Document, error) {
-	tbl := DocTypes.docStorName(dtype)
 	var elem Document
 	q := `
 	SELECT docs.path, docs.ac_id, docs.group_id, gm.name, docs.ctime, docs.title, docs.data, docs.docstate_id, dsm.name
-	FROM ` + tbl + ` AS docs
+	FROM wf_documents AS docs
 	JOIN wf_groups_master gm ON gm.id = docs.group_id
 	JOIN wf_docstates_master dsm ON docs.docstate_id = dsm.id
-	WHERE docs.id = ?
+	WHERE docs.doctype_id = ?
+	AND docs.id = ?
 	`
 
 	var row *sql.Row
 	if otx == nil {
-		row = db.QueryRow(q, id)
+		row = db.QueryRow(q, dtype, id)
 	} else {
-		row = otx.QueryRow(q, id)
+		row = otx.QueryRow(q, dtype, id)
 	}
 	err := row.Scan(&elem.Path, &elem.AccCtx.ID, &elem.Group.ID, &elem.Group.Name, &elem.Ctime, &elem.Title, &elem.Data, &elem.State.ID, &elem.State.Name)
 	if err != nil {
@@ -453,16 +452,14 @@ func (_Documents) GetParent(otx *sql.Tx, dtype DocTypeID, id DocumentID) (*Docum
 // This method is not exported.  It is used internally by `Workflow`
 // to move the document along the workflow, into a new document state.
 func (_Documents) setState(otx *sql.Tx, dtype DocTypeID, id DocumentID, state DocStateID, ac AccessContextID) error {
-	tbl := DocTypes.docStorName(dtype)
-
 	var q string
 	var err error
 	if ac > 0 {
-		q = `UPDATE ` + tbl + ` SET docstate_id = ?, ac_id = ? WHERE id = ?`
-		_, err = otx.Exec(q, state, ac, id)
+		q = `UPDATE wf_documents SET docstate_id = ?, ac_id = ? WHERE doctype_id = ? AND id = ?`
+		_, err = otx.Exec(q, state, ac, dtype, id)
 	} else {
-		q = `UPDATE ` + tbl + ` SET docstate_id = ? WHERE id = ?`
-		_, err = otx.Exec(q, state, id)
+		q = `UPDATE wf_documents SET docstate_id = ? WHERE doctype_id = ? AND id = ?`
+		_, err = otx.Exec(q, state, dtype, id)
 	}
 	return err
 }
@@ -475,11 +472,10 @@ func (_Documents) SetTitle(otx *sql.Tx, dtype DocTypeID, id DocumentID, title st
 	}
 
 	// A child document does not have its own title.
-	tbl := DocTypes.docStorName(dtype)
 	var path DocPath
 	var dgroup GroupID
-	q := `SELECT path, group_id FROM ` + tbl + ` WHERE id = ?`
-	row := db.QueryRow(q, id)
+	q := `SELECT path, group_id FROM wf_documents WHERE doctype_id = ? AND id = ?`
+	row := db.QueryRow(q, dtype, id)
 	err := row.Scan(&path, &dgroup)
 	if err != nil {
 		return err
@@ -499,8 +495,8 @@ func (_Documents) SetTitle(otx *sql.Tx, dtype DocTypeID, id DocumentID, title st
 		tx = otx
 	}
 
-	q = `UPDATE ` + tbl + ` SET title = ?, ctime = NOW() WHERE id = ?`
-	_, err = tx.Exec(q, title, id)
+	q = `UPDATE wf_documents SET title = ?, ctime = NOW() WHERE doctype_id = ? AND id = ?`
+	_, err = tx.Exec(q, title, dtype, id)
 	if err != nil {
 		return err
 	}
@@ -520,8 +516,6 @@ func (_Documents) SetData(otx *sql.Tx, dtype DocTypeID, id DocumentID, data stri
 		return errors.New("document data should not be empty")
 	}
 
-	tbl := DocTypes.docStorName(dtype)
-
 	var tx *sql.Tx
 	var err error
 	if otx == nil {
@@ -534,8 +528,8 @@ func (_Documents) SetData(otx *sql.Tx, dtype DocTypeID, id DocumentID, data stri
 		tx = otx
 	}
 
-	q := `UPDATE ` + tbl + ` SET data = ?, ctime = NOW() WHERE id = ?`
-	_, err = tx.Exec(q, data, id)
+	q := `UPDATE wf_documents SET data = ?, ctime = NOW() WHERE doctype_id = ? AND id = ?`
+	_, err = tx.Exec(q, data, dtype, id)
 	if err != nil {
 		return err
 	}

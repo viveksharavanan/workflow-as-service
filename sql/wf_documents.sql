@@ -1,17 +1,21 @@
--- CREATE TABLE wf_documents_<DOCTYPE_ID> (
---     id INT NOT NULL AUTO_INCREMENT,
---     path VARCHAR(1000) NOT NULL,
---     ac_id INT NOT NULL,
---     docstate_id INT NOT NULL,
---     group_id INT NOT NULL,
---     ctime TIMESTAMP NOT NULL,
---     title VARCHAR(250) NULL,
---     data TEXT NOT NULL,
---     PRIMARY KEY (id),
---     FOREIGN KEY (ac_id) REFERENCES wf_access_contexts(id),
---     FOREIGN KEY (docstate_id) REFERENCES wf_docstates_master(id),
---     FOREIGN KEY (group_id) REFERENCES wf_groups_master(id)
--- );
+DROP TABLE IF EXISTS wf_documents;
+
+CREATE TABLE wf_documents (
+    id INT NOT NULL AUTO_INCREMENT,
+    doctype_id INT NOT NULL,
+    path VARCHAR(1000) NOT NULL,
+    ac_id INT NOT NULL,
+    docstate_id INT NOT NULL,
+    group_id INT NOT NULL,
+    ctime TIMESTAMP NOT NULL,
+    title VARCHAR(250) NULL,
+    data TEXT NOT NULL,
+    PRIMARY KEY (id),
+    FOREIGN KEY (doctype_id) REFERENCES wf_doctypes_master(id),
+    FOREIGN KEY (ac_id) REFERENCES wf_access_contexts(id),
+    FOREIGN KEY (docstate_id) REFERENCES wf_docstates_master(id),
+    FOREIGN KEY (group_id) REFERENCES wf_groups_master(id)
+);
 
 --
 

@@ -206,8 +206,7 @@ func (_DocEvents) List(input *DocEventsListInput, offset, limit int64) ([]*DocEv
 	}
 
 	if input.AccessContextID > 0 {
-		tbl := DocTypes.docStorName(input.DocTypeID)
-		q += `JOIN ` + tbl + ` docs ON docs.id = de.doc_id
+		q += `JOIN wf_documents docs ON docs.doctype_id = de.doctype_id AND docs.id = de.doc_id
 		`
 		where = append(where, `docs.ac_id = ?`)
 		args = append(args, input.AccessContextID)

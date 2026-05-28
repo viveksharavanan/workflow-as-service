@@ -17,7 +17,6 @@ package flow
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 )
@@ -57,12 +56,6 @@ type _DocTypes struct{}
 // the system.
 var DocTypes _DocTypes
 
-// docStorName answers the appropriate table name for the given
-// document type.
-func (_DocTypes) docStorName(dtid DocTypeID) string {
-	return fmt.Sprintf("wf_documents_%03d", dtid)
-}
-
 // New creates and registers a new document type in the system.
 func (_DocTypes) New(otx *sql.Tx, name string) (DocTypeID, error) {
 	name = strings.TrimSpace(name)
@@ -88,33 +81,6 @@ func (_DocTypes) New(otx *sql.Tx, name string) (DocTypeID, error) {
 	}
 	var id int64
 	id, err = res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-
-	tbl := DocTypes.docStorName(DocTypeID(id))
-	q := `DROP TABLE IF EXISTS ` + tbl
-	res, err = tx.Exec(q)
-	if err != nil {
-		return 0, err
-	}
-	q = `
-	CREATE TABLE ` + tbl + ` (
-		id INT NOT NULL AUTO_INCREMENT,
-		path VARCHAR(1000) NOT NULL,
-		ac_id INT NOT NULL,
-		docstate_id INT NOT NULL,
-		group_id INT NOT NULL,
-		ctime TIMESTAMP NOT NULL,
-		title VARCHAR(250) NULL,
-		data TEXT NOT NULL,
-		PRIMARY KEY (id),
-		FOREIGN KEY (ac_id) REFERENCES wf_access_contexts(id),
-		FOREIGN KEY (docstate_id) REFERENCES wf_docstates_master(id),
-		FOREIGN KEY (group_id) REFERENCES wf_groups_master(id)
-	)
-	`
-	res, err = tx.Exec(q)
 	if err != nil {
 		return 0, err
 	}
