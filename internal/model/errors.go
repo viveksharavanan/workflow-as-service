@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flow
+package model
 
 // Error defines `flow`-specific errors, and satisfies the `error`
 // interface.

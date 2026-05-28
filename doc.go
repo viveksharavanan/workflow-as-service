@@ -18,18 +18,60 @@ package flow
 import (
 	"database/sql"
 	"log"
+
+	"github.com/viveksharavanan/workflow-as-service/internal/model"
+	"github.com/viveksharavanan/workflow-as-service/internal/store"
+	mysqlstore "github.com/viveksharavanan/workflow-as-service/internal/store/mysql"
+	"github.com/viveksharavanan/workflow-as-service/internal/workflow"
 )
 
-const (
-	// DefACRoleCount is the default number of roles a group can have
-	// in an access context.
-	DefACRoleCount = 1
-)
+// Type aliases for backward compatibility -- ID types
+type DocTypeID = model.DocTypeID
+type DocStateID = model.DocStateID
+type DocActionID = model.DocActionID
+type DocEventID = model.DocEventID
+type DocumentID = model.DocumentID
+type WorkflowID = model.WorkflowID
+type NodeID = model.NodeID
+type UserID = model.UserID
+type GroupID = model.GroupID
+type RoleID = model.RoleID
+type AccessContextID = model.AccessContextID
+type MessageID = model.MessageID
 
+// Type aliases for backward compatibility -- struct types
+type DocType = model.DocType
+type DocState = model.DocState
+type DocAction = model.DocAction
+type DocEvent = model.DocEvent
+type Document = model.Document
+type Workflow = model.Workflow
+type Node = model.Node
+type User = model.User
+type Group = model.Group
+type Role = model.Role
+type AccessContext = model.AccessContext
+type Transition = model.Transition
+type TransitionMap = model.TransitionMap
+
+// Type aliases for backward compatibility -- other types
+type NodeType = model.NodeType
+type NodeFunc = model.NodeFunc
+type EventStatus = model.EventStatus
+type Message = model.Message
+type DocPath = model.DocPath
+type AcGroupRoles = model.AcGroupRoles
+type AcGroup = model.AcGroup
+type Blob = model.Blob
+type Notification = model.Notification
+
+// Error type alias
+type Error = model.Error
+
+// Package-level state
 var db *sql.DB
-var blobsDir string
-
-//
+var s store.Store
+var engine *workflow.Engine
 
 func init() {
 	f := log.Flags()
@@ -44,25 +86,8 @@ func RegisterDB(sdb *sql.DB) error {
 		log.Fatal("given database handle is `nil`")
 	}
 	db = sdb
-
-	return nil
-}
-
-// SetBlobsDir specifies the base directory inside which blob files
-// should be stored.
-//
-// Inside this base directory, 256 subdirectories are created as hex
-// `00` through `ff`.  A blob is stored in the subdirectory whose name
-// matches the first two hex digits of its SHA1 sum.
-//
-// N.B. Once set, this MUST NOT change between runs.  Doing so will
-// result in loss of all previously stored blobs.  In addition,
-// corresponding documents get corrupted.
-func SetBlobsDir(base string) error {
-	if base == "" {
-		log.Fatal("given base directory path is empty")
-	}
-	blobsDir = base
+	s = mysqlstore.NewMySQLStore(sdb, "")
+	engine = workflow.NewEngine(s)
 
 	return nil
 }
